@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0f1b2d">
+<title>Daily Income &amp; Payout Tracker</title>
+<style>
+:root{--bg:#0f1b2d;--panel:#17263c;--line:#27395a;--text:#e8eef8;--mute:#9fb0c9;--in:#22c55e;--out:#ef4444;--blue:#3b82f6}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.45}
+button,input,select,textarea{font:inherit;color:inherit}
+.hidden{display:none!important}
+.wrap{max-width:960px;margin:0 auto;padding:12px}
+h1{font-size:1.15rem;margin:0}
+.btn{border:0;border-radius:10px;padding:12px 16px;min-height:46px;font-weight:600;cursor:pointer;background:var(--line)}
+.btn:disabled{opacity:.6}
+.btn.in{background:var(--in);color:#052e13}.btn.out{background:var(--out);color:#fff}.btn.blue{background:var(--blue);color:#fff}
+.btn.sm{min-height:36px;padding:6px 10px;font-size:.85rem}
+.cards{display:grid;gap:10px;grid-template-columns:repeat(3,1fr)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
+small,.mute{color:var(--mute)}
+.v{font-size:1.25rem;font-weight:700;margin-top:4px;word-break:break-word}
+.card.bal{grid-column:1/-1;order:-1;border-color:var(--blue)}
+.card.bal .v{font-size:2rem}
+.inc{color:var(--in)}.exp{color:var(--out)}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
+.panel h2{font-size:1rem;margin:0 0 10px}
+.filters{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
+label{display:block;font-size:.85rem;color:var(--mute);margin-bottom:4px}
+input,select,textarea{width:100%;padding:11px;border-radius:8px;border:1px solid var(--line);background:#0c1626;min-height:44px}
+textarea{min-height:70px}
+.row{display:grid;grid-template-columns:110px 80px 1.2fr 2fr 130px 130px;gap:8px;align-items:center;padding:10px 4px;border-bottom:1px solid var(--line)}
+.row.head{color:var(--mute);font-size:.8rem;font-weight:600}
+.row .amt{text-align:right;font-weight:700}
+.tag{font-size:.75rem;padding:2px 8px;border-radius:99px;width:fit-content}
+.tag.income{background:#14532d;color:#86efac}.tag.payout{background:#7f1d1d;color:#fca5a5}
+.btns{display:flex;gap:6px;flex-wrap:wrap}
+.empty{text-align:center;color:var(--mute);padding:24px 8px}
+.note{background:#3a2a05;border:1px solid #f59e0b;border-radius:10px;padding:10px;font-size:.85rem;margin-bottom:10px}
+dialog{border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--text);width:min(440px,94vw);padding:16px}
+dialog::backdrop{background:rgba(0,0,0,.6)}
+.field{margin-bottom:10px}
+.err{color:#fca5a5;font-size:.85rem;min-height:1.2em}
+#toast{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);padding:12px 16px;border-radius:10px;background:#0c1626;border:1px solid var(--line);max-width:92vw;z-index:9}
+#toast.ok{border-color:var(--in)}#toast.bad{border-color:var(--out)}#toast.warn{border-color:#f59e0b}
+header{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0}
+@media(max-width:700px){
+ .cards{grid-template-columns:1fr 1fr}
+ .row.head{display:none}
+ .row{grid-template-columns:1fr auto;padding:12px;margin-bottom:8px;border:1px solid var(--line);border-radius:10px;background:#0c1626}
+ .row .amt{grid-row:1;grid-column:2}
+ .row .d,.row .p,.row .n,.row .t,.row .btns{grid-column:1/-1}
+ .row .btns .btn{flex:1}
+}
+@media print{
+ body{background:#fff;color:#000}.noprint,.btns{display:none!important}
+ .card,.panel{background:#fff;border-color:#999}.row{border-color:#999;background:#fff!important}
+ .v,.inc,.exp{color:#000}
+}
+</style>
+</head>
+<body>
+<div id="toast" class="hidden" role="status" aria-live="polite"></div>
+<div class="wrap">
+ <header class="noprint"><h1>Income &amp; Payout Tracker</h1><span class="mute" id="storeNote"></span></header>
+
+ <div id="backupNote" class="note noprint hidden"></div>
+
+ <div class="actions noprint">
+  <button class="btn in" id="addIncome">+ Add Income</button>
+  <button class="btn out" id="addPayout">+ Add Payout</button>
+ </div>
+
+ <section class="cards" aria-label="Summary">
+  <div class="card"><small>Total Income</small><div class="v inc" id="totIn">Rs. 0.00</div></div>
+  <div class="card"><small>Total Payout</small><div class="v exp" id="totOut">Rs. 0.00</div></div>
+  <div class="card bal"><small>Remaining Balance</small><div class="v" id="totBal">Rs. 0.00</div></div>
+ </section>
+
+ <section class="panel" style="margin-top:12px">
+  <h2>Period summary</h2>
+  <div class="filters noprint">
+   <div><label for="period">Period</label>
+    <select id="period"><option value="today">Today</option><option value="week">Last 7 days</option><option value="month">This month</option><option value="all">All time</option><option value="date">Selected date</option></select></div>
+   <div id="pdBox" class="hidden"><label for="periodDate">Date</label><input id="periodDate" type="date"></div>
+  </div>
+  <div class="cards" style="margin-top:10px">
+   <div><small>Income</small><div class="v inc" id="pIn">Rs. 0.00</div></div>
+   <div><small>Payout</small><div class="v exp" id="pOut">Rs. 0.00</div></div>
+   <div><small>Net</small><div class="v" id="pNet">Rs. 0.00</div></div>
+  </div>
+ </section>
+
+ <section class="panel">
+  <h2>Transaction history <span class="mute" id="count"></span></h2>
+  <div class="filters noprint">
+   <div><label for="fType">Type</label><select id="fType"><option value="all">All transactions</option><option value="income">Income</option><option value="payout">Payout</option></select></div>
+   <div><label for="fDate">On date</label><input id="fDate" type="date"></div>
+   <div><label for="fFrom">From</label><input id="fFrom" type="date"></div>
+   <div><label for="fTo">To</label><input id="fTo" type="date"></div>
+   <div><label for="fSearch">Search</label><input id="fSearch" type="search" placeholder="Purpose or notes"></div>
+  </div>
+  <div class="btns noprint" style="margin:10px 0">
+   <button class="btn sm" id="clearF">Clear filters</button>
+   <button class="btn sm" id="csvBtn">Export CSV</button>
+   <button class="btn sm" id="printBtn">Print report</button>
+  </div>
+  <div id="list"></div>
+ </section>
+
+ <section class="panel noprint">
+  <h2>Backup &amp; move to another phone</h2>
+  <p class="mute" style="margin-top:0;font-size:.9rem">Your records are stored only in this browser on this phone. They do not sync by themselves. Save a backup file regularly, and import it on another phone to copy your records there.</p>
+  <div class="btns">
+   <button class="btn blue sm" id="backupBtn">Download backup</button>
+   <button class="btn sm" id="restoreBtn">Import backup</button>
+   <input type="file" id="restoreFile" accept="application/json,.json" class="hidden">
+  </div>
+ </section>
+</div>
+
+<dialog id="dlg">
+ <form id="txForm" novalidate>
+  <h2 id="dlgTitle" style="margin-top:0"></h2>
+  <div class="field"><label for="fAmount">Amount (NPR)</label><input id="fAmount" type="number" inputmode="decimal" step="0.01" min="0.01" required></div>
+  <div class="field"><label for="fPurpose" id="purposeLbl">Purpose</label><input id="fPurpose" maxlength="100" required></div>
+  <div class="field"><label for="fNotes">Description (optional)</label><textarea id="fNotes" maxlength="500"></textarea></div>
+  <div class="field"><label for="fTxDate">Date</label><input id="fTxDate" type="date" required></div>
+  <div class="err" id="txErr"></div>
+  <div class="actions" style="margin:0">
+   <button class="btn" type="button" id="cancelBtn">Cancel</button>
+   <button class="btn blue" id="saveBtn">Save</button>
+  </div>
+ </form>
+</dialog>
+
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const KEY="dipt.v1.transactions", META="dipt.v1.meta";
+const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+let txs=[], meta={lastBackup:null}, editing=null, kind="income", storageOk=true;
+
+/* ---------- storage ---------- */
+function load(){
+ try{
+  const r=localStorage.getItem(KEY);txs=r?JSON.parse(r):[];
+  if(!Array.isArray(txs))txs=[];
+  const m=localStorage.getItem(META);if(m)meta=JSON.parse(m);
+ }catch(e){storageOk=false;txs=[];toast("This browser blocks storage (private mode?). Records cannot be saved.","bad")}
+}
+function save(){
+ try{localStorage.setItem(KEY,JSON.stringify(txs));localStorage.setItem(META,JSON.stringify(meta));return true}
+ catch(e){toast("NOT saved: browser storage is full or blocked.","bad");return false}
+}
+const uid=()=>(crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2,10));
+
+/* ---------- helpers ---------- */
+const todayNP=()=>new Date().toLocaleDateString("en-CA",{timeZone:"Asia/Kathmandu"});
+const fmtDate=s=>{const [y,m,d]=s.split("-");return `${+d} ${MONTHS[+m-1]} ${y}`};
+const paisa=n=>Math.round(n*100);
+const money=p=>(p<0?"−":"")+"Rs. "+(Math.abs(p)/100).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
+const addDays=(s,n)=>{const [y,m,d]=s.split("-").map(Number);return new Date(Date.UTC(y,m-1,d+n)).toISOString().slice(0,10)};
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const sums=l=>{let i=0,o=0;l.forEach(t=>t.type==="income"?i+=paisa(t.amount):o+=paisa(t.amount));return{i,o,n:i-o}};
+let tt;
+function toast(msg,type="ok"){const t=$("toast");t.textContent=msg;t.className=type;clearTimeout(tt);tt=setTimeout(()=>t.className="hidden",type==="ok"?3000:6000)}
+
+/* ---------- render ---------- */
+function filtered(){
+ const ty=$("fType").value,d=$("fDate").value,f=$("fFrom").value,t=$("fTo").value,q=$("fSearch").value.trim().toLowerCase();
+ return txs.filter(x=>(ty==="all"||x.type===ty)&&(!d||x.date===d)&&(!f||x.date>=f)&&(!t||x.date<=t)
+  &&(!q||x.purpose.toLowerCase().includes(q)||(x.description||"").toLowerCase().includes(q)))
+  .sort((a,b)=>b.date.localeCompare(a.date)||b.created-a.created);
+}
+function render(){
+ const all=sums(txs);
+ $("totIn").textContent=money(all.i);$("totOut").textContent=money(all.o);
+ $("totBal").textContent=money(all.n);$("totBal").className="v "+(all.n<0?"exp":"");
+ const p=$("period").value,today=todayNP();$("pdBox").classList.toggle("hidden",p!=="date");
+ const inP=txs.filter(x=>p==="all"||(p==="today"&&x.date===today)||(p==="week"&&x.date>addDays(today,-7)&&x.date<=today)
+  ||(p==="month"&&x.date.slice(0,7)===today.slice(0,7))||(p==="date"&&x.date===$("periodDate").value));
+ const ps=sums(inP);$("pIn").textContent=money(ps.i);$("pOut").textContent=money(ps.o);
+ $("pNet").textContent=money(ps.n);$("pNet").className="v "+(ps.n<0?"exp":"");
+ const rows=filtered();$("count").textContent=`(${rows.length} of ${txs.length})`;
+ if(!txs.length)$("list").innerHTML='<div class="empty">No transactions yet. Tap “+ Add Income” or “+ Add Payout” to start.</div>';
+ else if(!rows.length)$("list").innerHTML='<div class="empty">No transactions match your filters.</div>';
+ else $("list").innerHTML='<div class="row head"><div>Date</div><div>Type</div><div>Purpose</div><div>Description</div><div style="text-align:right">Amount</div><div class="noprint">Actions</div></div>'+
+  rows.map(x=>`<div class="row"><div class="d">${fmtDate(x.date)}</div><div class="t"><span class="tag ${x.type}">${x.type==="income"?"Income":"Payout"}</span></div>
+  <div class="p"><b>${esc(x.purpose)}</b></div><div class="n">${esc(x.description)}</div>
+  <div class="amt ${x.type==="income"?"inc":"exp"}">${x.type==="income"?"+":"−"} ${money(paisa(x.amount))}</div>
+  <div class="btns"><button class="btn sm" data-edit="${x.id}">Edit</button><button class="btn sm" data-del="${x.id}">Delete</button></div></div>`).join("");
+ backupReminder();
+}
+function backupReminder(){
+ const n=$("backupNote");
+ if(!txs.length){n.classList.add("hidden");return}
+ const days=meta.lastBackup?Math.floor((Date.now()-meta.lastBackup)/864e5):null;
+ if(days===null||days>=7){
+  n.textContent=days===null?"You have not saved a backup yet. If you clear browser data or lose this phone, your records are gone. Use “Download backup” below.":`Your last backup was ${days} days ago. Please download a new backup below.`;
+  n.classList.remove("hidden");
+ }else n.classList.add("hidden");
+}
+["fType","fDate","fFrom","fTo","fSearch","period","periodDate"].forEach(id=>{$(id).addEventListener("input",render);$(id).addEventListener("change",render)});
+$("clearF").onclick=()=>{["fDate","fFrom","fTo","fSearch"].forEach(i=>$(i).value="");$("fType").value="all";render()};
+
+/* ---------- add / edit / delete ---------- */
+function openForm(k,tx){
+ kind=k;editing=tx||null;$("txErr").textContent="";
+ $("dlgTitle").textContent=(tx?"Edit ":"Add ")+(k==="income"?"Income":"Payout");
+ $("purposeLbl").textContent=k==="income"?"Income purpose (e.g. Salary, Business)":"Payout purpose (e.g. Food, Rent)";
+ $("saveBtn").textContent=tx?"Save changes":(k==="income"?"Save Income":"Save Payout");
+ $("fAmount").value=tx?tx.amount:"";$("fPurpose").value=tx?tx.purpose:"";$("fNotes").value=tx?tx.description:"";
+ $("fTxDate").value=tx?tx.date:todayNP();
+ $("dlg").showModal();$("fAmount").focus();
+}
+$("addIncome").onclick=()=>openForm("income");$("addPayout").onclick=()=>openForm("payout");
+$("cancelBtn").onclick=()=>$("dlg").close();
+
+$("txForm").addEventListener("submit",e=>{
+ e.preventDefault();
+ const amount=parseFloat($("fAmount").value),purpose=$("fPurpose").value.trim(),description=$("fNotes").value.trim(),date=$("fTxDate").value,err=$("txErr");
+ if(!(amount>0)||!isFinite(amount)){err.textContent="Enter an amount greater than zero.";return}
+ if(!purpose){err.textContent="Enter a purpose.";return}
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(date)){err.textContent="Choose a valid date.";return}
+ $("saveBtn").disabled=true;
+ const backup=JSON.stringify(txs),wasEdit=!!editing;
+ if(wasEdit){const t=txs.find(x=>x.id===editing.id);Object.assign(t,{type:kind,amount,purpose,description,date,updated:Date.now()})}
+ else txs.push({id:uid(),type:kind,amount,purpose,description,date,created:Date.now(),updated:Date.now()});
+ if(!save()){txs=JSON.parse(backup);$("saveBtn").disabled=false;return}
+ $("dlg").close();$("saveBtn").disabled=false;render();
+ const bal=sums(txs).n;
+ if(bal<0&&kind==="payout")toast(`Saved. Warning: your balance is now negative (${money(bal)}).`,"warn");
+ else toast(wasEdit?"Changes saved.":"Saved.");
+});
+
+$("list").addEventListener("click",e=>{
+ const ed=e.target.closest("[data-edit]"),dl=e.target.closest("[data-del]");
+ if(ed){const t=txs.find(x=>x.id===ed.dataset.edit);if(t)openForm(t.type,t)}
+ if(dl){const t=txs.find(x=>x.id===dl.dataset.del);
+  if(t&&confirm(`Delete this ${t.type} of ${money(paisa(t.amount))} (${t.purpose}) permanently?`)){
+   const backup=txs;txs=txs.filter(x=>x.id!==t.id);
+   if(save()){render();toast("Deleted.")}else txs=backup;
+  }}
+});
+
+/* ---------- CSV, print, backup ---------- */
+function download(name,text,type){
+ const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([text],{type}));
+ a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+$("csvBtn").onclick=()=>{
+ const rows=filtered();if(!rows.length){toast("Nothing to export.","warn");return}
+ const q=v=>{v=String(v??"");if(/^[=+\-@]/.test(v))v="'"+v;return '"'+v.replace(/"/g,'""')+'"'};
+ download(`transactions-${todayNP()}.csv`,"\ufeff"+["Date,Type,Purpose,Description,Amount (NPR)",...rows.map(t=>[t.date,t.type,q(t.purpose),q(t.description),t.amount.toFixed(2)].join(","))].join("\n"),"text/csv");
+};
+$("printBtn").onclick=()=>print();
+
+$("backupBtn").onclick=()=>{
+ if(!txs.length){toast("No records to back up yet.","warn");return}
+ download(`money-tracker-backup-${todayNP()}.json`,JSON.stringify({app:"dipt",version:1,exported:new Date().toISOString(),transactions:txs},null,1),"application/json");
+ meta.lastBackup=Date.now();save();render();toast("Backup downloaded. Keep the file safe (Google Drive, WhatsApp to yourself, etc.).");
+};
+$("restoreBtn").onclick=()=>$("restoreFile").click();
+$("restoreFile").addEventListener("change",async e=>{
+ const f=e.target.files[0];e.target.value="";if(!f)return;
+ try{
+  const d=JSON.parse(await f.text());
+  if(d.app!=="dipt"||!Array.isArray(d.transactions))throw new Error("bad");
+  const valid=d.transactions.filter(t=>t&&typeof t.id==="string"&&(t.type==="income"||t.type==="payout")&&typeof t.amount==="number"&&t.amount>0
+   &&typeof t.purpose==="string"&&t.purpose&&/^\d{4}-\d{2}-\d{2}$/.test(t.date));
+  const have=new Set(txs.map(t=>t.id));
+  const fresh=valid.filter(t=>!have.has(t.id)).map(t=>({id:t.id,type:t.type,amount:t.amount,purpose:t.purpose.slice(0,100),description:String(t.description||"").slice(0,500),date:t.date,created:+t.created||Date.now(),updated:+t.updated||Date.now()}));
+  if(!fresh.length){toast("Nothing new to import. These records are already here.","warn");return}
+  if(!confirm(`Add ${fresh.length} new record(s) from this backup? Existing records stay unchanged.`))return;
+  const backup=txs;txs=txs.concat(fresh);
+  if(save()){render();toast(`Imported ${fresh.length} record(s).`)}else txs=backup;
+ }catch(ex){toast("This is not a valid backup file.","bad")}
+});
+
+/* ---------- start ---------- */
+load();
+$("periodDate").value=todayNP();
+$("storeNote").textContent=storageOk?"Saved on this phone":"Storage blocked";
+if(navigator.storage&&navigator.storage.persist)navigator.storage.persist();
+render();
+</script>
+</body>
+</html>
